@@ -32,7 +32,7 @@ enum file_type_t {
 };
 
 struct inode_t {
-  uint64_t i_number, size, subfiles;
+  uint64_t i_number, size, sub_entries;
   enum file_type_t type;
   uint64_t first_block;
 };
@@ -188,7 +188,7 @@ const struct inode_t create_inode(struct filesystem_t *fs) {
   struct inode_t inode=(struct inode_t){
     .i_number=i_number
     ,.size=0
-    ,.subfiles=0
+    ,.sub_entries=0
     ,.type=_FILE
     ,.first_block=block
   };
@@ -204,7 +204,7 @@ const struct inode_t mount_root(struct filesystem_t *const fs) {
   struct inode_t inode=(struct inode_t) {
     .i_number=i_number
     ,.size=1
-    ,.subfiles=0
+    ,.sub_entries=0
     ,.type=DIRECTORY
     ,.first_block=block
   };
@@ -237,6 +237,19 @@ struct entry_t create_entry(const uint64_t i_number, char *name) {
   return entry;
 }
 
+void read_entries(struct entry_t entries[], uint8_t *block, const uint64_t total_entries) {
+  memcpy(entries, block, sizeof(struct entry_t)*total_entries);
+}
+
+const struct entry_t *entry_exists(const char name[], const struct entry_t *entries, const uint64_t total_entries) {
+  for(int i=0; i<total_entries; ++i) {
+    if(!strncmp(entries[i].name, name, strlen(entries[i].name))) {
+      return entries+i;
+    }
+  }
+  return 0;
+}
+
 void touch(struct filesystem_t *fs, char *name) {
   if(strlen(name) > FILENAME_SIZE) exit(81);
   struct inode_t root_inode=read_inode(fs->inodes, fs->metadata.root_inode, fs->metadata.sector_size);
@@ -244,13 +257,22 @@ void touch(struct filesystem_t *fs, char *name) {
   // TODO: definitely investigate later
   uint8_t block[fs->metadata.block_size];
   read_block(block, fs->data, root_inode.first_block, fs->metadata.block_size);
+
+  struct entry_t entries[root_inode.sub_entries];
+  read_entries(entries, block, root_inode.sub_entries);
+  const struct entry_t *entry_addr=entry_exists(name, entries, root_inode.sub_entries);
+  if(entry_addr!=0) {
+    printf("File or directory %s already exists\n", name);
+    return;
+  }
+
   struct inode_t inode=create_inode(fs);
   // for some reason retruning a value rather than a pointer segfaults
   // TODO: definitely investigate later
   struct entry_t entry=create_entry(inode.i_number, name);
-  write_entry_data(block, &entry, root_inode.subfiles);
+  write_entry_data(block, &entry, root_inode.sub_entries);
   write_block_data(fs->data, block, root_inode.first_block, fs->metadata.block_size);
-  root_inode.subfiles++;
+  root_inode.sub_entries++;
 
   write_inode_data(fs->inodes, &root_inode, fs->metadata.sector_size);
 }
@@ -259,9 +281,14 @@ void ls(struct filesystem_t *const fs, const char *const name) {
   struct inode_t root_inode=read_inode(fs->inodes, fs->metadata.root_inode, fs->metadata.sector_size);
   uint8_t block[fs->metadata.block_size];
   read_block(block, fs->data, root_inode.first_block, fs->metadata.block_size);
-  struct entry_t entry;
-  memcpy(&entry, block, sizeof(struct entry_t));
-  printf("%s %d\n", entry.name, entry.i_number);
+  struct entry_t entries[root_inode.sub_entries];
+  read_entries(entries, block, root_inode.sub_entries);
+  const struct entry_t *entry_addr=entry_exists(name, entries, root_inode.sub_entries);
+  if(entry_addr==0) {
+    printf("No such file or directory\n");
+    return;
+  }
+  printf("file %s\n", entry_addr->name);
 }
 
 struct filesystem_t *fs_format() {
@@ -278,7 +305,11 @@ struct filesystem_t *fs_format() {
 
 int main(int argc, char **argv) {
   struct filesystem_t *const fs=fs_format();
-  touch(fs, "main");
-  ls(fs, "main");
+  touch(fs, "main1");
+  touch(fs, "main2");
+  touch(fs, "main3");
+  touch(fs, "main3");
+  ls(fs, "main1");
+  free(fs);
   return EXIT_SUCCESS;
 }
