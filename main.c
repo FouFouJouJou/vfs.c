@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #define BLOCK_SIZE 4096
+#define SLASH "/"
 #define TOTAL_BLOCK_SECTORS 32
 #define SECTOR_SIZE BLOCK_SIZE/TOTAL_BLOCK_SECTORS
 #define FILENAME_SIZE 120
@@ -241,7 +242,14 @@ void read_entries(struct entry_t entries[], uint8_t *block, const uint64_t total
   memcpy(entries, block, sizeof(struct entry_t)*total_entries);
 }
 
-const struct entry_t *entry_exists(const char name[], const struct entry_t *entries, const uint64_t total_entries) {
+void read_root_entries(const struct filesystem_t *const fs, struct entry_t entries[]) {
+  struct inode_t root_inode=read_inode(fs->inodes, fs->metadata.root_inode, fs->metadata.sector_size);
+  uint8_t block[fs->metadata.block_size];
+  read_block(block, fs->data, root_inode.first_block, fs->metadata.block_size);
+  read_entries(entries, block, root_inode.sub_entries);
+}
+
+struct entry_t *entry_exists(const char name[], struct entry_t *entries, const uint64_t total_entries) {
   for(int i=0; i<total_entries; ++i) {
     if(!strncmp(entries[i].name, name, strlen(entries[i].name))) {
       return entries+i;
@@ -260,6 +268,15 @@ const struct entry_t *entry_exists_(const struct filesystem_t *fs, const char na
   struct entry_t entries[root_inode.sub_entries];
   read_entries(entries, block, root_inode.sub_entries);
   return entry_exists(name, entries, root_inode.sub_entries);
+}
+
+struct entry_t *const entry_exists__(const char name[], struct entry_t entries[], const uint64_t total_entries) {
+  for(int i=0; i<total_entries; ++i) {
+    if(!strncmp(entries[i].name, name, strlen(entries[i].name))) {
+      return entries+i;
+    }
+  }
+  return 0;
 }
 
 
@@ -288,6 +305,17 @@ void touch(struct filesystem_t *const fs, const char *const name) {
 
 void ls(struct filesystem_t *const fs, const char *const name) {
   printf("ls %s", name);
+  if(!strncmp(name, SLASH, 1)) {
+    printf("\n");
+    struct inode_t root_inode=read_inode(fs->inodes, fs->metadata.root_inode, fs->metadata.sector_size);
+    struct entry_t entries[root_inode.sub_entries];
+    read_root_entries(fs, entries);
+    for(int i=0; i<root_inode.sub_entries; ++i) {
+      printf("%s\n", entries[i].name);
+    }
+    return;
+  }
+
   const struct entry_t *entry_addr=entry_exists_(fs, name);
   if(entry_addr==0) {
     printf(": No such file or directory\n");
@@ -309,10 +337,10 @@ void cat(struct filesystem_t *const fs, const char *const name) {
     return;
   }
   printf("\n");
-
   uint8_t block[fs->metadata.block_size];
   read_block(block, fs->data, inode.first_block, fs->metadata.block_size);
   for(int i=0; i<inode.size; ++i) printf("%c", block[i]);
+  printf("\n");
 }
 
 void echo(struct filesystem_t *const fs, const char *const name, const char data[], const uint64_t size) {
@@ -332,6 +360,37 @@ void echo(struct filesystem_t *const fs, const char *const name, const char data
   // TODO: adjust size to already existing data
   inode.size=size;
   write_inode_data(fs->inodes, &inode, fs->metadata.sector_size);
+}
+
+void rm(struct filesystem_t *const fs, const char *const name) {
+  printf("rm %s", name);  
+  struct inode_t root_inode=read_inode(fs->inodes, fs->metadata.root_inode, fs->metadata.sector_size);
+  struct entry_t entries[fs->metadata.block_size];
+  read_root_entries(fs, entries);
+  struct entry_t *const entry_addr=entry_exists__(name, entries, root_inode.sub_entries);
+  if(entry_addr==0) {
+    printf(": No such file or directory\n");
+    return;
+  }
+  printf("\n");
+  struct inode_t inode=read_inode(fs->inodes, entry_addr->i_number, fs->metadata.sector_size);
+  memset(fs->data+(inode.first_block*fs->metadata.block_size), 0, fs->metadata.block_size);
+  memset(fs->inodes+(inode.i_number*fs->metadata.sector_size), 0, fs->metadata.sector_size);
+  list_free(&fs->free_blocks, inode.first_block);
+  list_free(&fs->free_inodes, inode.i_number);
+
+  for(int i=0; i<root_inode.sub_entries; ++i) {
+    if(entry_addr == entries+i) {
+      printf("found it\n");
+      memset(entry_addr, 0, sizeof(struct entry_t));
+      for(int k=i+1; k<root_inode.sub_entries; ++k) {
+	entries[k-1]=entries[k];
+      }
+    }
+  }
+  root_inode.sub_entries--;
+  write_inode_data(fs->inodes, &root_inode, fs->metadata.block_size);
+  write_block_data(fs->data, (uint8_t*)entries, root_inode.first_block, root_inode.sub_entries*sizeof(struct entry_t));
 }
 
 struct filesystem_t *fs_format() {
@@ -355,6 +414,8 @@ int main(int argc, char **argv) {
   const char *const data="I love it";
   echo(fs, "main1", data, strlen(data));
   cat(fs, "main1");
+  rm(fs, "main2");
+  ls(fs, "/");
   free(fs);
   return EXIT_SUCCESS;
 }
