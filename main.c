@@ -170,7 +170,6 @@ void init_free_lists(struct filesystem_t *const fs) {
 }
 
 void write_inode_data(uint8_t *const inodes, const struct inode_t *const inode, const uint64_t sector_size) {
-  const uint64_t i_number=inode->i_number;
   memcpy(inodes+(inode->i_number*sector_size), inode, sizeof(struct inode_t));
 }
 
@@ -180,7 +179,7 @@ void write_block_data(uint8_t *const blocks, uint8_t block[], uint64_t block_num
 
 void mkdir() {}
 
-const struct inode_t create_inode(struct filesystem_t *fs) {
+const struct inode_t create_inode(struct filesystem_t *const fs) {
   const uint64_t i_number=list_first(&fs->free_inodes);
   const uint64_t block=list_first(&fs->free_blocks);
   write_bit(fs->i_bmap, i_number, 1);
@@ -218,6 +217,7 @@ struct inode_t read_inode(uint8_t *const inodes, const uint64_t i_number, const 
   return inode;
 }
 
+// TODO: add number of bytes to read param
 void read_block(uint8_t *const block, const uint8_t *const blocks, const uint64_t block_number, const uint64_t block_size) {
   memcpy(block, blocks+(block_number*block_size), block_size);
 }
@@ -230,7 +230,7 @@ void write_entry_data(uint8_t *const block, struct entry_t *const entry, uint64_
   memcpy(block+(entry_number*sizeof(struct entry_t)), entry, sizeof(struct entry_t));
 }
 
-struct entry_t create_entry(const uint64_t i_number, char *name) {
+struct entry_t create_entry(const uint64_t i_number, const char *const name) {
   struct entry_t entry;
   entry.i_number=i_number;
   strncpy(entry.name, name, strlen(name)+1);
@@ -250,8 +250,7 @@ const struct entry_t *entry_exists(const char name[], const struct entry_t *entr
   return 0;
 }
 
-void touch(struct filesystem_t *fs, char *name) {
-  if(strlen(name) > FILENAME_SIZE) exit(81);
+const struct entry_t *entry_exists_(const struct filesystem_t *fs, const char name[]) {
   struct inode_t root_inode=read_inode(fs->inodes, fs->metadata.root_inode, fs->metadata.sector_size);
   // if read_inode returns value then remove and adding the variable block breaks data
   // TODO: definitely investigate later
@@ -260,45 +259,87 @@ void touch(struct filesystem_t *fs, char *name) {
 
   struct entry_t entries[root_inode.sub_entries];
   read_entries(entries, block, root_inode.sub_entries);
-  const struct entry_t *entry_addr=entry_exists(name, entries, root_inode.sub_entries);
-  if(entry_addr!=0) {
-    printf("File or directory %s already exists\n", name);
+  return entry_exists(name, entries, root_inode.sub_entries);
+}
+
+
+void touch(struct filesystem_t *const fs, const char *const name) {
+  printf("touch %s", name);
+  if(strlen(name) > FILENAME_SIZE) exit(81);
+
+  if(entry_exists_(fs, name)) {
+    printf(": File or directory already exists\n");
     return;
   }
-
+  printf("\n");
+  struct inode_t root_inode=read_inode(fs->inodes, fs->metadata.root_inode, fs->metadata.sector_size);
   struct inode_t inode=create_inode(fs);
+
+  uint8_t block[fs->metadata.block_size];
+  read_block(block, fs->data, root_inode.first_block, fs->metadata.block_size);
   // for some reason retruning a value rather than a pointer segfaults
   // TODO: definitely investigate later
   struct entry_t entry=create_entry(inode.i_number, name);
   write_entry_data(block, &entry, root_inode.sub_entries);
-  write_block_data(fs->data, block, root_inode.first_block, fs->metadata.block_size);
+  write_block_data(fs->data+(root_inode.first_block*fs->metadata.block_size), block, root_inode.first_block, fs->metadata.block_size);
   root_inode.sub_entries++;
-
   write_inode_data(fs->inodes, &root_inode, fs->metadata.sector_size);
 }
 
 void ls(struct filesystem_t *const fs, const char *const name) {
-  struct inode_t root_inode=read_inode(fs->inodes, fs->metadata.root_inode, fs->metadata.sector_size);
-  uint8_t block[fs->metadata.block_size];
-  read_block(block, fs->data, root_inode.first_block, fs->metadata.block_size);
-  struct entry_t entries[root_inode.sub_entries];
-  read_entries(entries, block, root_inode.sub_entries);
-  const struct entry_t *entry_addr=entry_exists(name, entries, root_inode.sub_entries);
+  printf("ls %s", name);
+  const struct entry_t *entry_addr=entry_exists_(fs, name);
   if(entry_addr==0) {
-    printf("No such file or directory\n");
+    printf(": No such file or directory\n");
     return;
   }
-  printf("file %s\n", entry_addr->name);
+  printf(": file %s\n", entry_addr->name);
+}
+
+void cat(struct filesystem_t *const fs, const char *const name) {
+  printf("cat %s", name);
+  const struct entry_t *entry_addr=entry_exists_(fs, name);
+  if(entry_addr==0) {
+    printf(": No such file or directory\n");
+    return;
+  }
+  struct inode_t inode=read_inode(fs->inodes, entry_addr->i_number, fs->metadata.sector_size);
+  if(inode.size == 0) {
+    printf("\n");
+    return;
+  }
+  printf("\n");
+
+  uint8_t block[fs->metadata.block_size];
+  read_block(block, fs->data, inode.first_block, fs->metadata.block_size);
+  for(int i=0; i<inode.size; ++i) printf("%c", block[i]);
+}
+
+void echo(struct filesystem_t *const fs, const char *const name, const char data[], const uint64_t size) {
+  printf("echo %.*s >> %s", size, data, name);
+  const struct entry_t *entry_addr=entry_exists_(fs, name);
+  if(entry_addr==0) {
+    printf(": No such file or directory\n");
+    return;
+  }
+  printf("\n");
+  struct inode_t inode=read_inode(fs->inodes, entry_addr->i_number, fs->metadata.sector_size);
+
+  uint8_t block[fs->metadata.block_size];
+  read_block(block, fs->data, inode.first_block, fs->metadata.block_size);
+  memcpy(block, data, size);
+  write_block_data(fs->data, block, inode.first_block, fs->metadata.block_size);
+  // TODO: adjust size to already existing data
+  inode.size=size;
+  write_inode_data(fs->inodes, &inode, fs->metadata.sector_size);
 }
 
 struct filesystem_t *fs_format() {
   struct filesystem_t *const fs=calloc(1, sizeof(struct filesystem_t));
   memset(fs->disk, 0, DISK_SIZE);
-
   init_metadata(&fs->metadata);
   init_regions(fs);
   init_free_lists(fs);
-
   mount_root(fs);
   return fs;
 }
@@ -309,7 +350,11 @@ int main(int argc, char **argv) {
   touch(fs, "main2");
   touch(fs, "main3");
   touch(fs, "main3");
+  ls(fs, "main");
   ls(fs, "main1");
+  const char *const data="I love it";
+  echo(fs, "main1", data, strlen(data));
+  cat(fs, "main1");
   free(fs);
   return EXIT_SUCCESS;
 }
