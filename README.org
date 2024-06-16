@@ -6,15 +6,14 @@
   make
 #+END_SRC
 
-* TODO Functionality [1/3]
-  - [X] Basic IO[5/5]
+* TODO Functionality [1/4]
+  - [X] Basic IO[4/4]
     - [X] touch
-    - [X] mkdir
-    - [X] read
-    - [X] write
+    - [X] cat
+    - [X] echo
     - [X] rm
+  - [] CLI [0/1]
   - [] Persiting to .disk file [0/1]
   - [] Mounting [0/2]
     - [] Loading .disk file 
     - [] Creating a mount point
-       
