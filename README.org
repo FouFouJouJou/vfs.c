@@ -1,6 +1,6 @@
 #+TITLE: A flat virtual file system
 ** Resouces
--[[https://pages.cs.wisc.edu/~remzi/OSTEP/file-implementation.pdf][ File System Implementation]]
+- [[https://pages.cs.wisc.edu/~remzi/OSTEP/file-implementation.pdf][ File System Implementation]]
 ** Instructions
 #+BEGIN_SRC bash
   make
