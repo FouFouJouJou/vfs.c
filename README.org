@@ -6,14 +6,16 @@
   make
 #+END_SRC
 
-* TODO Functionality [1/4]
+* TODO Functionality [3/6]
   - [X] Basic IO[4/4]
     - [X] touch
     - [X] cat
     - [X] echo
     - [X] rm
-  - [] CLI [0/1]
-  - [X] Persiting to .disk file [1/1]
+  - [X] Persiting to .disk file
   - [X] Mounting [2/2]
     - [X] Loading .disk file 
     - [X] Mounting and using the fs
+  - [] CLI
+  - [] Extents
+  - [] Partitions
