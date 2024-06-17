@@ -11,7 +11,7 @@
 #define TOTAL_BLOCK_SECTORS 32
 #define SECTOR_SIZE BLOCK_SIZE/TOTAL_BLOCK_SECTORS
 #define FILENAME_SIZE 120
-#define DISK_SIZE 1000000
+#define DISK_SIZE 1000072
 #define TOTAL_BLOCKS DISK_SIZE/BLOCK_SIZE
 
 // 1mb disk
@@ -59,8 +59,8 @@ struct filesystem_t {
   struct list_t free_blocks, free_inodes;
 };
 
-const struct filesystem_metadata_t init_metadata(struct filesystem_metadata_t *const metadata) {
-  *metadata=(struct filesystem_metadata_t){
+const struct filesystem_metadata_t init_metadata(struct filesystem_t *fs) {
+  fs->metadata=(struct filesystem_metadata_t){
     .block_size=BLOCK_SIZE
     ,.sector_size=SECTOR_SIZE
     ,.super_size=1
@@ -70,13 +70,13 @@ const struct filesystem_metadata_t init_metadata(struct filesystem_metadata_t *c
     ,.root_inode=0
     ,.node_index=0
   };
-  metadata->data_size=DISK_SIZE-(
-    metadata->super_size
-    +metadata->i_bmap_size
-    +metadata->d_bmap_size
-    +metadata->inodes_size
-  )*metadata->block_size;
-  return *metadata;
+  fs->metadata.data_size=DISK_SIZE-(
+    fs->metadata.super_size
+    +fs->metadata.i_bmap_size
+    +fs->metadata.d_bmap_size
+    +fs->metadata.inodes_size
+  )*fs->metadata.block_size;
+  return fs->metadata;
 }
 
 void init_regions(struct filesystem_t *const fs) {
@@ -230,9 +230,6 @@ void read_block(uint8_t *const block, const uint8_t *const blocks, const uint64_
   memcpy(block, blocks+(block_number*block_size), block_size);
 }
 
-struct filesystem_t *mount(char *disk_file) {
-  return 0;
-}
 
 void write_entry_data(uint8_t *const block, struct entry_t *const entry, uint64_t entry_number) {
   memcpy(block+(entry_number*sizeof(struct entry_t)), entry, sizeof(struct entry_t));
@@ -408,36 +405,64 @@ void rm(struct filesystem_t *const fs, const char *const name) {
 struct filesystem_t *fs_format() {
   struct filesystem_t *const fs=calloc(1, sizeof(struct filesystem_t));
   memset(fs->disk, 0, DISK_SIZE);
-  init_metadata(&fs->metadata);
+  init_metadata(fs);
   init_regions(fs);
   init_free_lists(fs);
+  write_metadata(fs);
   mount_root(fs);
   return fs;
 }
 
-int main(int argc, char **argv) {
-  struct filesystem_t *const fs=fs_format();
+void save(struct filesystem_t*const fs, char *disk_file) {
+  int fd=open(disk_file, O_WRONLY|O_CREAT, 0644);
+  write(fd, fs->disk, DISK_SIZE);
+  close(fd);
+}
 
+void simulate(struct filesystem_t *fs) {
   touch(fs, "main1");
   touch(fs, "main2");
   touch(fs, "main3");
-  touch(fs, "main3");
+  touch(fs, "main4");
 
   ls(fs, "main");
   ls(fs, "main1");
   ls(fs, "/");
 
-  const char *const data="I love it too much";
+  const char *const data="C is king";
   echo(fs, "main1", data, strlen(data));
   cat(fs, "main1");
   rm(fs, "main2");
   ls(fs, "/");
+}
 
-  int fd=open("fs.disk", O_WRONLY|O_CREAT, 0644);
-  write(fd, &fs->metadata, sizeof(struct filesystem_metadata_t));
-  write(fd, &fs->disk, DISK_SIZE);
+struct filesystem_t *mount(char *disk_file) {
+  int fd=open(disk_file, O_RDONLY);
+  struct filesystem_t *fs=calloc(1, sizeof(struct filesystem_t));
+  size_t size=lseek(fd, 0, SEEK_END);
+  lseek(fd, 0, SEEK_SET);
+  size_t bytes_read=read(fd, fs->disk, size); 
+  memcpy(&(fs->metadata), fs->disk, sizeof(struct filesystem_metadata_t));
   close(fd);
-  free(fs);
+  init_regions(fs);
+  init_free_lists(fs);
+  return fs;
+}
+
+int main(int argc, char **argv) {
+  struct filesystem_t *const vfs=fs_format();
+  simulate(vfs);
+  save(vfs, "fs.disk");
+  free(vfs);
+
+  printf("----------------------------------\n");
+  struct filesystem_t *ffs=mount("fs.disk");
+  ls(ffs, "/");
+  ls(ffs, "main4");
+  cat(ffs, "main1");
+  free(ffs);
+
+
 
   return EXIT_SUCCESS;
 }
