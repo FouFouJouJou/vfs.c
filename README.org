@@ -13,7 +13,7 @@
     - [X] echo
     - [X] rm
   - [] CLI [0/1]
-  - [] Persiting to .disk file [0/1]
+  - [X] Persiting to .disk file [1/1]
   - [] Mounting [0/2]
     - [] Loading .disk file 
     - [] Creating a mount point

@@ -1,9 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
-#include <math.h>
 #include <unistd.h>
+#include <string.h>
+#include <stdint.h>
+#include <math.h>
+#include <fcntl.h>
 
 #define BLOCK_SIZE 4096
 #define SLASH "/"
@@ -40,7 +41,7 @@ struct inode_t {
 
 struct filesystem_metadata_t {
   uint64_t block_size, sector_size, node_index;
-  uint8_t super_size, i_bmap_size, d_bmap_size, inodes_size;
+  uint64_t super_size, i_bmap_size, d_bmap_size, inodes_size, data_size;
   uint64_t root_inode;
 };
 
@@ -69,6 +70,12 @@ const struct filesystem_metadata_t init_metadata(struct filesystem_metadata_t *c
     ,.root_inode=0
     ,.node_index=0
   };
+  metadata->data_size=DISK_SIZE-(
+    metadata->super_size
+    +metadata->i_bmap_size
+    +metadata->d_bmap_size
+    +metadata->inodes_size
+  )*metadata->block_size;
   return *metadata;
 }
 
@@ -281,7 +288,7 @@ struct entry_t *const entry_exists__(const char name[], struct entry_t entries[]
 
 
 void touch(struct filesystem_t *const fs, const char *const name) {
-  printf("touch %s", name);
+  printf("# touch %s", name);
   if(strlen(name) > FILENAME_SIZE) exit(81);
 
   if(entry_exists_(fs, name)) {
@@ -298,13 +305,18 @@ void touch(struct filesystem_t *const fs, const char *const name) {
   // TODO: definitely investigate later
   struct entry_t entry=create_entry(inode.i_number, name);
   write_entry_data(block, &entry, root_inode.sub_entries);
-  write_block_data(fs->data+(root_inode.first_block*fs->metadata.block_size), block, root_inode.first_block, fs->metadata.block_size);
+  write_block_data(
+    fs->data+(root_inode.first_block*fs->metadata.block_size)
+    ,block
+    ,root_inode.first_block
+    ,fs->metadata.block_size
+  );
   root_inode.sub_entries++;
   write_inode_data(fs->inodes, &root_inode, fs->metadata.sector_size);
 }
 
 void ls(struct filesystem_t *const fs, const char *const name) {
-  printf("ls %s", name);
+  printf("# ls %s", name);
   if(!strncmp(name, SLASH, 1)) {
     printf("\n");
     struct inode_t root_inode=read_inode(fs->inodes, fs->metadata.root_inode, fs->metadata.sector_size);
@@ -325,7 +337,7 @@ void ls(struct filesystem_t *const fs, const char *const name) {
 }
 
 void cat(struct filesystem_t *const fs, const char *const name) {
-  printf("cat %s", name);
+  printf("# cat %s", name);
   const struct entry_t *entry_addr=entry_exists_(fs, name);
   if(entry_addr==0) {
     printf(": No such file or directory\n");
@@ -344,7 +356,7 @@ void cat(struct filesystem_t *const fs, const char *const name) {
 }
 
 void echo(struct filesystem_t *const fs, const char *const name, const char data[], const uint64_t size) {
-  printf("echo %.*s >> %s", size, data, name);
+  printf("# echo %.*s >> %s", size, data, name);
   const struct entry_t *entry_addr=entry_exists_(fs, name);
   if(entry_addr==0) {
     printf(": No such file or directory\n");
@@ -363,7 +375,7 @@ void echo(struct filesystem_t *const fs, const char *const name, const char data
 }
 
 void rm(struct filesystem_t *const fs, const char *const name) {
-  printf("rm %s", name);  
+  printf("# rm %s", name);  
   struct inode_t root_inode=read_inode(fs->inodes, fs->metadata.root_inode, fs->metadata.sector_size);
   struct entry_t entries[fs->metadata.block_size];
   read_root_entries(fs, entries);
@@ -405,17 +417,27 @@ struct filesystem_t *fs_format() {
 
 int main(int argc, char **argv) {
   struct filesystem_t *const fs=fs_format();
+
   touch(fs, "main1");
   touch(fs, "main2");
   touch(fs, "main3");
   touch(fs, "main3");
+
   ls(fs, "main");
   ls(fs, "main1");
-  const char *const data="I love it";
+  ls(fs, "/");
+
+  const char *const data="I love it too much";
   echo(fs, "main1", data, strlen(data));
   cat(fs, "main1");
   rm(fs, "main2");
   ls(fs, "/");
+
+  int fd=open("fs.disk", O_WRONLY|O_CREAT, 0644);
+  write(fd, &fs->metadata, sizeof(struct filesystem_metadata_t));
+  write(fd, &fs->disk, DISK_SIZE);
+  close(fd);
   free(fs);
+
   return EXIT_SUCCESS;
 }
