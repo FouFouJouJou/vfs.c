@@ -320,7 +320,7 @@ void ls(struct filesystem_t *const fs, const char *const name) {
     struct entry_t entries[root_inode.sub_entries];
     read_root_entries(fs, entries);
     for(int i=0; i<root_inode.sub_entries; ++i) {
-      printf("%s\n", entries[i].name);
+      printf("%s - %ld\n", entries[i].name, entries[i].i_number);
     }
     return;
   }
@@ -390,7 +390,6 @@ void rm(struct filesystem_t *const fs, const char *const name) {
 
   for(int i=0; i<root_inode.sub_entries; ++i) {
     if(entry_addr == entries+i) {
-      printf("found it\n");
       memset(entry_addr, 0, sizeof(struct entry_t));
       for(int k=i+1; k<root_inode.sub_entries; ++k) {
 	entries[k-1]=entries[k];
@@ -450,19 +449,9 @@ struct filesystem_t *mount(char *disk_file) {
 }
 
 int main(int argc, char **argv) {
-  struct filesystem_t *const vfs=fs_format();
-  simulate(vfs);
-  save(vfs, "fs.disk");
-  free(vfs);
-
-  printf("----------------------------------\n");
   struct filesystem_t *ffs=mount("fs.disk");
   ls(ffs, "/");
-  ls(ffs, "main4");
-  cat(ffs, "main1");
+  save(ffs, "fs.disk");
   free(ffs);
-
-
-
   return EXIT_SUCCESS;
 }
