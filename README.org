@@ -7,7 +7,8 @@
 #+END_SRC
 
 * TODO Functionality [3/6]
-  - [X] Basic IO[4/4]
+  - [X] Basic IO [5/5]
+    - [X] ls
     - [X] touch
     - [X] cat
     - [X] echo
@@ -16,6 +17,11 @@
   - [X] Mounting [2/2]
     - [X] Loading .disk file 
     - [X] Mounting and using the fs
-  - [] CLI
+  - [] CLI [1/5]
+    - [X] ls
+    - [] touch
+    - [] cat
+    - [] echo
+    - [] rm
   - [] Extents
   - [] Partitions

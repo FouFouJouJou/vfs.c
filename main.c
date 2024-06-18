@@ -7,7 +7,9 @@
 #include <fcntl.h>
 
 #define BLOCK_SIZE 4096
+#define COMMAND_BUFF 1024
 #define SLASH "/"
+#define DISK_FILE "fs.disk"
 #define TOTAL_BLOCK_SECTORS 32
 #define SECTOR_SIZE BLOCK_SIZE/TOTAL_BLOCK_SECTORS
 #define FILENAME_SIZE 120
@@ -448,10 +450,50 @@ struct filesystem_t *mount(char *disk_file) {
   return fs;
 }
 
+// TODO: proper lexing at least, raw-dawging it for now.
+// TODO: seperate by spaces at least
+uint8_t interpret(struct filesystem_t *const fs, const char *const command, ssize_t size) {
+  char args[COMMAND_BUFF];
+  if(!strncmp(command, "ls", 2)) {
+    memcpy(args, command+3, size-3);
+    ls(fs, args);
+    return 0;
+  }
+  if(!strncmp(command, "exit", size)) {
+    return 1;
+  }
+
+  printf("No such command\n");
+  return 0;
+}
+
+ssize_t prompt(char *command) {
+  uint8_t extra[COMMAND_BUFF];
+  char prompt[4]=">> ";
+  uint8_t done=0;
+  write(1, prompt, strlen(prompt));
+  ssize_t read_bytes=read(0, command, COMMAND_BUFF); 
+  command[read_bytes-1]='\0';
+  fflush(stdin);
+  return read_bytes;
+}
+
 int main(int argc, char **argv) {
-  struct filesystem_t *ffs=mount("fs.disk");
-  ls(ffs, "/");
-  save(ffs, "fs.disk");
+  //TODO: alternative api somehow
+  // size=4;
+  // function_pointer_list[size]={ls, cat, rm, echo, 0};
+  //char *command=prompt();
+  //[function_call_pointer, ...args]=interpret( command,function_pointer_list, size);
+  //function_call_pointer(ffs, ...args);
+
+  char command[COMMAND_BUFF];
+  struct filesystem_t *ffs=mount(DISK_FILE);
+  uint8_t done=0;
+  while(!done) {
+    ssize_t size=prompt(command);
+    done=interpret(ffs, command, size);
+  }
+  save(ffs, DISK_FILE);
   free(ffs);
   return EXIT_SUCCESS;
 }
