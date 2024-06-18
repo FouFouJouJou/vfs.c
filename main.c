@@ -315,7 +315,6 @@ void touch(struct filesystem_t *const fs, const char *const name) {
 }
 
 void ls(struct filesystem_t *const fs, const char *const name) {
-  printf("# ls %s", name);
   if(!strncmp(name, SLASH, 1)) {
     printf("\n");
     struct inode_t root_inode=read_inode(fs->inodes, fs->metadata.root_inode, fs->metadata.sector_size);
@@ -336,7 +335,6 @@ void ls(struct filesystem_t *const fs, const char *const name) {
 }
 
 void cat(struct filesystem_t *const fs, const char *const name) {
-  printf("# cat %s", name);
   const struct entry_t *entry_addr=entry_exists_(fs, name);
   if(entry_addr==0) {
     printf(": No such file or directory\n");
@@ -355,7 +353,6 @@ void cat(struct filesystem_t *const fs, const char *const name) {
 }
 
 void echo(struct filesystem_t *const fs, const char *const name, const char data[], const uint64_t size) {
-  printf("# echo %.*s >> %s", size, data, name);
   const struct entry_t *entry_addr=entry_exists_(fs, name);
   if(entry_addr==0) {
     printf(": No such file or directory\n");
@@ -374,7 +371,6 @@ void echo(struct filesystem_t *const fs, const char *const name, const char data
 }
 
 void rm(struct filesystem_t *const fs, const char *const name) {
-  printf("# rm %s", name);  
   struct inode_t root_inode=read_inode(fs->inodes, fs->metadata.root_inode, fs->metadata.sector_size);
   struct entry_t entries[fs->metadata.block_size];
   read_root_entries(fs, entries);
@@ -450,21 +446,73 @@ struct filesystem_t *mount(char *disk_file) {
   return fs;
 }
 
+ssize_t split_args(char *args, char *args_list[]) {
+  char *delims=" \0";
+  ssize_t argc=0, count=0;
+  while(*args != '\0') {
+    count=strcspn(args, delims);
+    *(args_list+argc)=calloc(count+1, sizeof(char));
+    memcpy(*(args_list+argc), args, count);
+    (*(args_list+argc))[count]='\0';
+    args+=count+1;
+    argc++;
+  }
+  return argc;
+}
 // TODO: proper lexing at least, raw-dawging it for now.
 // TODO: seperate by spaces at least
 uint8_t interpret(struct filesystem_t *const fs, const char *const command, ssize_t size) {
   char args[COMMAND_BUFF];
+  uint8_t status=0;
   if(!strncmp(command, "ls", 2)) {
     memcpy(args, command+3, size-3);
     ls(fs, args);
-    return 0;
+    goto zero;
   }
+
+  if(!strncmp(command, "touch", 5)) {
+    memcpy(args, command+6, size-6);
+    touch(fs, args);
+    goto zero;
+  }
+
+  if(!strncmp(command, "rm", 2)) {
+    memcpy(args, command+3, size-3);
+    rm(fs, args);
+    goto zero;
+  }
+
+  if(!strncmp(command, "cat", 3)) {
+    memcpy(args, command+4, size-4);
+    cat(fs, args);
+    goto zero;
+  }
+
+  if(!strncmp(command, "echo", 4)) {
+    memcpy(args, command+5, size-4);
+    char *echo_args[COMMAND_BUFF]={0};
+    ssize_t argc=split_args(args, echo_args);
+    if(argc < 2) {
+      printf("Not enough arguments\n");
+      goto zero;
+    }
+    char *file_name=echo_args[0];
+    echo(fs, file_name, args+strlen(echo_args[0])+1, strlen(args+strlen(echo_args[0])));
+    goto zero;
+  }
+
   if(!strncmp(command, "exit", size)) {
-    return 1;
+    status=1;
+    goto one;
   }
 
   printf("No such command\n");
-  return 0;
+
+  zero:
+    return 0;
+
+  one:
+    return 1;
 }
 
 ssize_t prompt(char *command) {
@@ -478,20 +526,20 @@ ssize_t prompt(char *command) {
   return read_bytes;
 }
 
+//TODO: alternative api somehow
+// size=4;
+// function_pointer_list[size]={ls, cat, rm, echo, 0};
+//char *command=prompt();
+//[function_call_pointer, ...args]=interpret( command,function_pointer_list, size);
+//function_call_pointer(ffs, ...args);
 int main(int argc, char **argv) {
-  //TODO: alternative api somehow
-  // size=4;
-  // function_pointer_list[size]={ls, cat, rm, echo, 0};
-  //char *command=prompt();
-  //[function_call_pointer, ...args]=interpret( command,function_pointer_list, size);
-  //function_call_pointer(ffs, ...args);
-
   char command[COMMAND_BUFF];
   struct filesystem_t *ffs=mount(DISK_FILE);
   uint8_t done=0;
   while(!done) {
     ssize_t size=prompt(command);
     done=interpret(ffs, command, size);
+    memset(command, 0, COMMAND_BUFF);
   }
   save(ffs, DISK_FILE);
   free(ffs);

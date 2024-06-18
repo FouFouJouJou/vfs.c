@@ -17,11 +17,11 @@
   - [X] Mounting [2/2]
     - [X] Loading .disk file 
     - [X] Mounting and using the fs
-  - [] CLI [1/5]
+  - [X] CLI [5/5]
     - [X] ls
-    - [] touch
-    - [] cat
-    - [] echo
-    - [] rm
+    - [X] touch
+    - [X] cat
+    - [X] echo
+    - [X] rm
   - [] Extents
   - [] Partitions
