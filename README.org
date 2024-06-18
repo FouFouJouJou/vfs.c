@@ -6,7 +6,7 @@
   make
 #+END_SRC
 
-* TODO Functionality [3/6]
+* TODO Functionality [4/6]
   - [X] Basic IO [5/5]
     - [X] ls
     - [X] touch
