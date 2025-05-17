@@ -1,12 +1,16 @@
 #+TITLE: A flat virtual file system
+My first ever go at implementing file system structures.
 ** Resouces
-- [[https://pages.cs.wisc.edu/~remzi/OSTEP/file-implementation.pdf][ File System Implementation]]
+- [[https://pages.cs.wisc.edu/~remzi/OSTEP/file-implementation.pdf][ File System Implementation]] has been nothing but phenomenal and inspiring to dive deep into file system and enhance my knowledge on low level concepts
+  I was not aware of when It comes to data storage and indexing in your typical hard drive.
 ** Instructions
+The project uses vanilla [[https://command-not-found.com/make][make]] to build.
 #+BEGIN_SRC bash
   make
+  ./out
 #+END_SRC
 
-* TODO Functionality [4/6]
+* TODO Functionality [4/4]
   - [X] Basic IO [5/5]
     - [X] ls
     - [X] touch
@@ -15,7 +19,7 @@
     - [X] rm
   - [X] Persiting to .disk file
   - [X] Mounting [2/2]
-    - [X] Loading .disk file 
+    - [X] Loading .disk file
     - [X] Mounting and using the fs
   - [X] CLI [5/5]
     - [X] ls
