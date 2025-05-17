@@ -61,7 +61,7 @@ struct filesystem_t {
   struct list_t free_blocks, free_inodes;
 };
 
-const struct filesystem_metadata_t init_metadata(struct filesystem_t *fs) {
+struct filesystem_metadata_t init_metadata(struct filesystem_t *fs) {
   fs->metadata=(struct filesystem_metadata_t){
     .block_size=BLOCK_SIZE
     ,.sector_size=SECTOR_SIZE
@@ -105,7 +105,7 @@ void unset_inode_bit(uint8_t *const bit_map, const uint64_t i_number) {
   const uint64_t bit_offset=i_number%8;
   *(bit_map+byte_offset)&=((1 << bit_offset)^0xFF);
 }
-const uint8_t get_inode_bit(const uint8_t *const bit_map, const uint64_t i_number) {
+uint8_t get_inode_bit(const uint8_t *const bit_map, const uint64_t i_number) {
   const uint64_t byte_offset=i_number/8;
   const uint64_t bit_offset=i_number%8;
   return (*(bit_map+byte_offset) >> bit_offset) & 0x01;
@@ -134,7 +134,7 @@ void list_free(struct list_t *list, uint64_t addr) {
   list->count++;
 }
 
-const uint64_t list_first(struct list_t *list) {
+uint64_t list_first(struct list_t *list) {
   if(list->head == 0) exit(80);
   const uint64_t addr=list->head->addr;
   struct node_t *const old_head=list->head;
@@ -189,7 +189,7 @@ void write_block_data(uint8_t *const blocks, uint8_t block[], uint64_t block_num
 
 void mkdir() {}
 
-const struct inode_t create_inode(struct filesystem_t *const fs) {
+struct inode_t create_inode(struct filesystem_t *const fs) {
   const uint64_t i_number=list_first(&fs->free_inodes);
   const uint64_t block=list_first(&fs->free_blocks);
   write_bit(fs->i_bmap, i_number, 1);
@@ -205,7 +205,7 @@ const struct inode_t create_inode(struct filesystem_t *const fs) {
   return inode;
 }
 
-const struct inode_t mount_root(struct filesystem_t *const fs) {
+struct inode_t mount_root(struct filesystem_t *const fs) {
   const uint64_t i_number=list_first(&fs->free_inodes);
   const uint64_t block=list_first(&fs->free_blocks);
   write_bit(fs->i_bmap, i_number, 1);
@@ -256,7 +256,7 @@ void read_root_entries(const struct filesystem_t *const fs, struct entry_t entri
 }
 
 struct entry_t *entry_exists(const char name[], struct entry_t *entries, const uint64_t total_entries) {
-  for(int i=0; i<total_entries; ++i) {
+  for(uint64_t i=0; i<total_entries; ++i) {
     if(!strncmp(entries[i].name, name, strlen(entries[i].name))) {
       return entries+i;
     }
@@ -276,8 +276,8 @@ const struct entry_t *entry_exists_(const struct filesystem_t *fs, const char na
   return entry_exists(name, entries, root_inode.sub_entries);
 }
 
-struct entry_t *const entry_exists__(const char name[], struct entry_t entries[], const uint64_t total_entries) {
-  for(int i=0; i<total_entries; ++i) {
+struct entry_t *entry_exists__(const char name[], struct entry_t entries[], const uint64_t total_entries) {
+  for(uint64_t i=0; i<total_entries; ++i) {
     if(!strncmp(entries[i].name, name, strlen(entries[i].name))) {
       return entries+i;
     }
@@ -320,7 +320,7 @@ void ls(struct filesystem_t *const fs, const char *const name) {
     struct inode_t root_inode=read_inode(fs->inodes, fs->metadata.root_inode, fs->metadata.sector_size);
     struct entry_t entries[root_inode.sub_entries];
     read_root_entries(fs, entries);
-    for(int i=0; i<root_inode.sub_entries; ++i) {
+    for(uint64_t i=0; i<root_inode.sub_entries; ++i) {
       printf("%s - %ld\n", entries[i].name, entries[i].i_number);
     }
     return;
@@ -348,7 +348,7 @@ void cat(struct filesystem_t *const fs, const char *const name) {
   printf("\n");
   uint8_t block[fs->metadata.block_size];
   read_block(block, fs->data, inode.first_block, fs->metadata.block_size);
-  for(int i=0; i<inode.size; ++i) printf("%c", block[i]);
+  for(uint64_t i=0; i<inode.size; ++i) printf("%c", block[i]);
   printf("\n");
 }
 
@@ -386,10 +386,10 @@ void rm(struct filesystem_t *const fs, const char *const name) {
   list_free(&fs->free_blocks, inode.first_block);
   list_free(&fs->free_inodes, inode.i_number);
 
-  for(int i=0; i<root_inode.sub_entries; ++i) {
+  for(uint64_t i=0; i<root_inode.sub_entries; ++i) {
     if(entry_addr == entries+i) {
       memset(entry_addr, 0, sizeof(struct entry_t));
-      for(int k=i+1; k<root_inode.sub_entries; ++k) {
+      for(uint64_t k=i+1; k<root_inode.sub_entries; ++k) {
 	entries[k-1]=entries[k];
       }
     }
@@ -435,10 +435,15 @@ void simulate(struct filesystem_t *fs) {
 
 struct filesystem_t *mount(char *disk_file) {
   int fd=open(disk_file, O_RDONLY);
+  if (fd == -1) {
+    printf("nope\n");
+    return fs_format();
+  }
+
   struct filesystem_t *fs=calloc(1, sizeof(struct filesystem_t));
   size_t size=lseek(fd, 0, SEEK_END);
   lseek(fd, 0, SEEK_SET);
-  size_t bytes_read=read(fd, fs->disk, size); 
+  read(fd, fs->disk, size);
   memcpy(&(fs->metadata), fs->disk, sizeof(struct filesystem_metadata_t));
   close(fd);
   init_regions(fs);
@@ -463,7 +468,6 @@ ssize_t split_args(char *args, char *args_list[]) {
 // TODO: seperate by spaces at least
 uint8_t interpret(struct filesystem_t *const fs, const char *const command, ssize_t size) {
   char args[COMMAND_BUFF];
-  uint8_t status=0;
   if(!strncmp(command, "ls", 2)) {
     memcpy(args, command+3, size-3);
     ls(fs, args);
@@ -502,7 +506,6 @@ uint8_t interpret(struct filesystem_t *const fs, const char *const command, ssiz
   }
 
   if(!strncmp(command, "exit", size)) {
-    status=1;
     goto one;
   }
 
@@ -516,11 +519,9 @@ uint8_t interpret(struct filesystem_t *const fs, const char *const command, ssiz
 }
 
 ssize_t prompt(char *command) {
-  uint8_t extra[COMMAND_BUFF];
   char prompt[4]=">> ";
-  uint8_t done=0;
   write(1, prompt, strlen(prompt));
-  ssize_t read_bytes=read(0, command, COMMAND_BUFF); 
+  ssize_t read_bytes=read(0, command, COMMAND_BUFF);
   command[read_bytes-1]='\0';
   fflush(stdin);
   return read_bytes;
@@ -532,7 +533,7 @@ ssize_t prompt(char *command) {
 //char *command=prompt();
 //[function_call_pointer, ...args]=interpret( command,function_pointer_list, size);
 //function_call_pointer(ffs, ...args);
-int main(int argc, char **argv) {
+int main() {
   char command[COMMAND_BUFF];
   struct filesystem_t *ffs=mount(DISK_FILE);
   uint8_t done=0;

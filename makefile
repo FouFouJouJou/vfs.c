@@ -1,2 +1,2 @@
 default:
-	gcc main.c -Im -o out && ./out
+	gcc main.c -Wall -Wextra -Wpedantic -Werror -g -Im -g -o out
