@@ -1,12 +1,12 @@
 #+TITLE: A flat virtual file system
 My first ever go at implementing file system structures.
 ** Resouces
-- [[https://pages.cs.wisc.edu/~remzi/OSTEP/file-implementation.pdf][ File System Implementation]] has been nothing but phenomenal and inspiring to dive deep into file system and enhance my knowledge on low level concepts
+- [[https://pages.cs.wisc.edu/~remzi/OSTEP/file-implementation.pdf][ File System Implementation]] has been nothing but phenomenal and inspiring to dive deep into file systems and enhance my knowledge on low level concepts
   I was not aware of when It comes to data storage and indexing in your typical hard drive.
 ** Instructions
 The project uses vanilla [[https://command-not-found.com/make][make]] to build. The cli work was clumsy and lazy.
 After performing basic IO operations, the content of the files created alongside the files themselves will be stored in
-binary file called =fs.disk= after program termination. This mimicks shutting down your pc but still having your data stored.
+binary file called =fs.disk=. This file mimicks physical storage mediums, so that after program termination, i.e. pc shutting down, nothing is lost.
 #+BEGIN_SRC bash
   make
   ./out
