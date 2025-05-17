@@ -6,7 +6,7 @@ My first ever go at implementing file system structures.
 ** Instructions
 The project uses vanilla [[https://command-not-found.com/make][make]] to build. The cli work was clumsy and lazy.
 After performing basic IO operations, the content of the files created alongside the files themselves will be stored in
-binary file called =fs.disk=. This file mimicks physical storage mediums, so that after program termination, i.e. pc shutting down, nothing is lost.
+a binary file called =fs.disk=. This file mimicks physical storage mediums, so that after program termination, i.e. pc shutting down, nothing is lost.
 #+BEGIN_SRC bash
   make
   ./out
